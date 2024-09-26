@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"log"
 	"time"
 	"y/p2p"
 )
@@ -33,9 +35,17 @@ func main() {
 	s2 := makeServer(":4000",":3000") 
 
 
-	go s1.Start()
-	time.Sleep(time.Second*2)
-
+	go func ()  {
+		log.Fatal(s1.Start())
+	}()
+	time.Sleep(1*time.Second)
 	go s2.Start()
+	time.Sleep(1*time.Second)
+
+	data := bytes.NewReader([]byte("my big data"))
+
+	s2.StoreData("key", data)
+
+	select{}
 
 }

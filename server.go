@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
+	"io"
 	"log"
 	"sync"
 	"y/p2p"
@@ -34,6 +37,40 @@ func NewFileServer(opts FileServerOpts) *FileServer{
 		peers: make(map[string]p2p.Peer),
 	}
 }
+type Payload struct {
+	Key string
+	Data []byte
+}
+
+func(s *FileServer) broadcast(p *Payload) error {
+	peers := []io.Writer{}
+	for _, peer := range s.peers {
+		peers = append(peers, peer)
+	}
+	mw := io.MultiWriter(peers...)
+	return gob.NewEncoder(mw).Encode(p)
+}
+
+func (s *FileServer) StoreData(key string, r io.Reader) error {
+
+	buf := new(bytes.Buffer)
+	tee := io.TeeReader(r, buf)
+
+	err := s.store.Write(key, tee)
+	if err != nil {
+		return err
+	}
+	
+
+	p := &Payload{
+		Key: key,
+		Data: buf.Bytes(),
+	}
+
+	fmt.Println(buf.Bytes())
+
+	return s.broadcast(p)
+}
 
 func(s *FileServer) Stop(){
 	close(s.quitch)
@@ -55,8 +92,13 @@ func (s *FileServer) loop(){
 	for {
 		select{
 		case msg := <- s.Transport.Consume():
-			fmt.Println(msg)
-		
+			fmt.Println("received a message")
+			var p Payload
+			err := gob.NewDecoder(bytes.NewReader(msg.Payload)).Decode(&p)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("%+v\n", string(p.Data))
 		case <- s.quitch:
 			return
 	}
